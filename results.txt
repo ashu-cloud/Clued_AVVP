@@ -1,0 +1,106 @@
+Download features as explained in original github repo "https://github.com/Yu-Wu/Modaily-Aware-Audio-Visual-Video-Parsing" and keep the 3 folders (r2plus1d_18,res152,vggish) in feats folder.
+There are 3 steps carried out in the whole pipeline explained in the paper - Base training, Label refining using the base trained model, and then retraining using updated labels.
+We mostly focus on the first step of base training to improve the segment and even level F1 scores for the parsing.
+For reproducing any of the below experiments, go to the folder mentioned in the first line of the bullet, and run -
+python main_avvp.py --mode train --audio_dir ../feats/vggish/ --video_dir ../feats/res152/ --st_dir ../feats/r2plus1d_18
+
+All the below results for step 1 are done on val dataset to find best parsing results, for 8th bullet, where we take the best model trained in 7th bullet and run step 2 and 3, we generate result on test dataset to compare against table 2 of paper.
+
+1) In original directory, the original code for this step 1 is present, which yeilds the following scores after 12 epochs of training -
+Our Baseline Performance-
+Audio    62.4    54.1
+Visual   54.1    49.6
+AudVis   51.1    44.8
+Segment-levelType@Avg. F1: 55.9
+Segment-level Event@Avg. F1: 57.1
+Event-level Type@Avg. F1: 49.5
+Event-level Event@Avg. F1: 50.1
+
+[For first 3 rows, for example for audio, first column is segment level average score for audio modality, and second column is event level average score. Last 4 rows are for modality weighted scores]
+
+2) In jointAtt directory, we implement joint attention over audio and visual modality instead of adding self and cross modal attention in the feature aggregation step. One benefit is that model gains good accuracy pretty fast in 1-2 epochs, but doesnt beat the baseline performance as the model in original code. Scores change minimally after first epoch.
+Best performance after 15 epochs-
+Audio    62.0    53.0
+Visual   54.4    49.2
+AudVis   50.9    43.5
+Segment-levelType@Avg. F1: 55.8
+Segment-level Event@Avg. F1: 56.8
+Event-level Type@Avg. F1: 48.6
+Event-level Event@Avg. F1: 48.9
+
+3) In confInsteadOfFeatureAgg, we use conformer instead of feature aggregation, as feature aggregation, if noticed properly, is basically dual transformer with attention key and value mattrices containing both audio and visual features, we use confiormer with joint encoding, to check if performance boost is observed.
+Best performance after epoch 7-
+Audio    61.2    53.3
+Visual   53.6    49.7
+AudVis   49.8    44.3
+Segment-levelType@Avg. F1: 54.9
+Segment-level Event@Avg. F1: 56.3
+Event-level Type@Avg. F1: 49.1
+Event-level Event@Avg. F1: 50.2
+
+4) In withoutCrossModalAtt, we removed cross modality aggregation to check if cross modal interaction helps parsing. Numbers suggest they do.
+Bestperformance after 1 epoch -
+Audio    49.6    41.7
+Visual   53.9    50.2
+AudVis   41.2    35.4
+Segment-levelType@Avg. F1: 48.2
+Segment-level Event@Avg. F1: 50.2
+Event-level Type@Avg. F1: 42.5
+Event-level Event@Avg. F1: 42.8
+[All the numbers drop significantly]
+
+5) In confAdditionalJointEncoder, we also included a joint conformer on top of feature aggregation to see if deeper model with richer interation between modalities helps parsing. Numbers suggest they don't as comapred to base lines, type avg drops by 1 F1 scores and remaining scores are same. We also tried with Transformer encoder and got similar numbers.
+Best Performance after 12 epochs-
+Audio    61.0    52.0
+Visual   54.2    49.6
+AudVis   49.7    42.4
+Segment-levelType@Avg. F1: 54.9
+Segment-level Event@Avg. F1: 56.9
+Event-level Type@Avg. F1: 48.0
+Event-level Event@Avg. F1: 49.0
+
+6) In posEmbFeatAgg, we tried adding postional embeddings in original feature aggregation step, but it hurt the model perofrmance significantly, possibly because the intiial encodings from pre trained models used change significanlty from these positional embeddings.
+Best performance after 6 epochs-
+Audio    54.8    45.4
+Visual   48.4    44.0
+AudVis   45.1    39.1
+Segment-levelType@Avg. F1: 49.4
+Segment-level Event@Avg. F1: 50.8
+Event-level Type@Avg. F1: 42.8
+Event-level Event@Avg. F1: 42.4
+[All the scores have decreased significantly compared to baseline]
+
+7) In weirdBehav, we were trying to implement Conformer on top of the ggregated features to observe changes. Although we didnt get improvement initially, but when we comment the conformer code with intialization to conformer left in init function, we observed performance boost of 1 F1 scores in modality averaged segment and event level scores. All random seeds are same throughout, possibly the initialization changes the random numbers generated for next layers in init function, leading to this change.
+Best performance-
+Epoch 9
+Audio    61.8    53.4
+Visual   56.9    52.7
+AudVis   53.8    47.6
+Segment-levelType@Avg. F1: 57.5
+Segment-level Event@Avg. F1: 57.2
+Event-level Type@Avg. F1: 51.2
+Event-level Event@Avg. F1: 49.9
+[Type averages improve by 1 F1 score]
+
+Note - For all our experiments, including the original one, we observed that while calculating global frame level probability of classes, the weighted average of 2 modalities tends towards paying most of the attention to the audio features. This happens because at feature aggregation step, both modalities learn cross modal features, leading to lesser dependence on requiring both modalities for generating global class probabilities. [Average gradient L2 norm ratio of audio to visual is 60:3]
+
+8) For weirdBehav model, we also ran step 2 and step 3. Steps to reproduce result by first running weirdBehav folder expt.
+Then, run in step2_find_exchange -
+python main_avvp.py --mode estimate_labels --audio_dir ../feats/vggish/ --video_dir ../feats/res152/ --st_dir ../feats/r2plus1d_18 --model_save_dir ../step1_train_base_model/models/ --checkpoint MMIL_Net_9
+
+Then, copy need_to_change.pkl file generated into step3_retrain directory
+Then, in step3_retrain, run -
+python main_avvp.py --mode retrain --audio_dir ../feats/vggish/ --video_dir ../feats/res152/ --st_dir ../feats/r2plus1d_18
+
+Results on Test dataset -
+Audio    59.7    52.5
+Visual   60.7    57.3
+AudVis   54.5    47.7
+Segment-levelType@Avg. F1: 58.3
+Segment-level Event@Avg. F1: 57.0
+Event-level Type@Avg. F1: 52.5
+Event-level Event@Avg. F1: 50.0
+
+[1 point improvement in Type average scores of audio-visual and visual modalities compared to table 2 results of Baseline+C+R]
+
+Note- In general, while training, we observe an inherent trade-off between audio and visual parsing accuracy, after certain number of iterations, when audio parsing improved, visual starts decreasing, and vice-versa

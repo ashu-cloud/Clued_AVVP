@@ -6,7 +6,7 @@ python main_avvp.py --mode train --audio_dir ../feats/vggish/ --video_dir ../fea
 
 All the below results for step 1 are done on val dataset to find best parsing results, for 8th bullet, where we take the best model trained in 7th bullet and run step 2 and 3, we generate result on test dataset to compare against table 2 of paper.
 
-1) In original directory, the original code for this step 1 is present, which yeilds the following scores after 12 epochs of training -
+1) In original directory, the original code for this step 1 is present, which yields the following scores after 12 epochs of training -
 Our Baseline Performance-
 Audio    62.4    54.1
 Visual   54.1    49.6
